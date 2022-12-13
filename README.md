@@ -1,4 +1,6 @@
-# Payment gateway [Paypal](https://paypal.me/ibnux)
+# [ON PROPGRESS] Payment Gateway [Paypal](https://paypal.me/ibnux)
+
+Not yet ready
 
 Payment Gateway [Paypal](https://paypal.me/ibnux) for PHPNuxBill
 
