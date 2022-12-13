@@ -1,4 +1,4 @@
-# [ON PROPGRESS] Payment Gateway [Paypal](https://paypal.me/ibnux)
+# [ON PROGRESS] Payment Gateway [Paypal](https://paypal.me/ibnux)
 
 Not yet ready
 
