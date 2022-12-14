@@ -6,7 +6,7 @@ Payment Gateway [Paypal](https://paypal.me/ibnux) for PHPNuxBill
 
 Copy **paypal.php** and **paypal_currency.json** to folder **system/paymentgateway/**
 
-Copy **ui/paypal.tp** to folder **system/paymentgateway/ui/**
+Copy **ui/paypal.tpl** to folder **system/paymentgateway/ui/**
 
 
 ## Author
