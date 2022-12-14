@@ -45,17 +45,6 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="col-md-2 control-label">Webhook URL</label>
-                        <div class="col-md-6">
-                            <small class="form-text text-muted">Optional, Good for PHPNuxbill hosted on
-                                public server</small>
-                            <input type="text" readonly class="form-control" onclick="this.select()"
-                                value="{$_url}callback/paypal">
-                            <a href="https://developer.paypal.com/dashboard/applications/live" target="_blank"
-                                class="help-block">https://developer.paypal.com/dashboard/applications/live</a>
-                        </div>
-                    </div>
-                    <div class="form-group">
                         <div class="col-lg-offset-2 col-lg-10">
                             <button class="btn btn-primary waves-effect waves-light"
                                 type="submit">{$_L['Save']}</button>

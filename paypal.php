@@ -1,3 +1,4 @@
+
 <?php
 
 
@@ -70,14 +71,103 @@ function paypal_save_config()
     r2(U . 'paymentgateway/paypal', 's', $_L['Settings_Saved_Successfully']);
 }
 
+function paypal_create_transaction($trx, $user)
+{
+    global $config;
+    $json = [
+        'intent' => 'CAPTURE',
+        'purchase_units' => [
+            [
+                'amount' => [
+                    'currency_code' => $config['paypal_currency'],
+                    'value' => strval($trx['price'])
+                ]
+            ]
+        ],
+        "application_context" => [
+            "return_url" => U . "order/view/" . $trx['id'] . '/check',
+            "cancel_url" => U . "order/view/" . $trx['id'],
+        ]
+    ];
+    //die(json_encode($json,JSON_PRETTY_PRINT));
+
+    $result = json_decode(
+        Http::postJsonData(
+            paypal_get_server() . 'checkout/orders',
+            $json,
+            [
+                'Prefer: return=minimal',
+                'PayPal-Request-Id: paypal_' . $trx['id'],
+                'Authorization: Bearer ' . paypalGetAccessToken()
+            ]
+        ),
+        true
+    );
+    if (!$result['id']) {
+        sendTelegram("paypal_create_transaction FAILED: \n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        r2(U . 'order/package', 'e', Lang::T("Failed to create Paypal transaction."));
+    }
+    $urlPayment = "";
+    foreach ($result['links'] as $link) {
+        if ($link['rel'] == 'approve') {
+            $urlPayment = $link['href'];
+            break;
+        }
+    }
+    $d = ORM::for_table('tbl_payment_gateway')
+        ->where('username', $user['username'])
+        ->where('status', 1)
+        ->find_one();
+    $d->gateway_trx_id = $result['id'];
+    $d->pg_url_payment = $urlPayment;
+    $d->pg_request = json_encode($result);
+    $d->expired_date = date('Y-m-d H:i:s', strtotime("+ 6 HOUR"));
+    $d->save();
+    header('Location: ' . $urlPayment);
+    exit();
+}
+
+/*
+*/
+
+function paypal_payment_notification()
+{
+    // Not yet implemented
+}
+
+function paypal_get_status($trx, $user)
+{
+    $result = json_decode(Http::getData(paypal_get_server() . 'checkout/orders/' . $trx['gateway_trx_id'], ['Authorization: Bearer ' . paypalGetAccessToken()]), true);
+    if (in_array($result['status'], ['APPROVED', 'COMPLETED']) && $trx['status'] != 2) {
+        if (!Package::rechargeUser($user['id'], $trx['routers'], $trx['plan_id'], $trx['gateway'], 'Paypal')) {
+            r2(U . "order/view/" . $trx['id'], 'd', Lang::T("Failed to activate your Package, try again later."));
+        }
+        $trx->pg_paid_response = json_encode($result);
+        $trx->payment_method = 'PAYPAL';
+        $trx->payment_channel = 'paypal';
+        $trx->paid_date = date('Y-m-d H:i:s', strtotime($result['updated']));
+        $trx->status = 2;
+        $trx->save();
+        r2(U . "order/view/" . $trx['id'], 's', Lang::T("Transaction has been paid."));
+    } else if ($result['status'] == 'VOIDED') {
+        $trx->pg_paid_response = json_encode($result);
+        $trx->status = 3;
+        $trx->save();
+        r2(U . "order/view/" . $trx['id'], 'd', Lang::T("Transaction expired."));
+    } else {
+        sendTelegram("xendit_get_status: unknown result\n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        r2(U . "order/view/" . $trx['id'], 'w', "Transaction status :" . $result['status']);
+    }
+}
+
 function paypalGetAccessToken()
 {
     global $config;
-    $result = Http::postData(paypal_get_server() . 'oauth2/token', [
+    $result = Http::postData(str_replace('v2', 'v1', paypal_get_server()) . 'oauth2/token', [
         "grant_type" => "client_credentials"
     ], [], $config['paypal_client_id'] . ":" . $config['paypal_secret_key']);
     $json = json_decode($result, true);
-    //if()
+    return $json['access_token'];
 }
 
 
@@ -85,8 +175,8 @@ function paypal_get_server()
 {
     global $_app_stage;
     if ($_app_stage == 'Live') {
-        return 'https://api-m.paypal.com/v1/';
+        return 'https://api-m.paypal.com/v2/';
     } else {
-        return 'https://api-m.sandbox.paypal.com/v1/';
+        return 'https://api-m.sandbox.paypal.com/v2/';
     }
 }
