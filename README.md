@@ -2,6 +2,8 @@
 
 Payment Gateway [Paypal](https://paypal.me/ibnux) for PHPNuxBill
 
+[Download](https://github.com/hotspotbilling/phpnuxbill-paypal/archive/refs/heads/main.zip)
+
 ## Installation
 
 Copy **paypal.php** and **paypal_currency.json** to folder **system/paymentgateway/**
