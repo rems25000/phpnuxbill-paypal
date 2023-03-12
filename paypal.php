@@ -15,7 +15,7 @@ function paypal_validate_config()
 {
     global $config;
     if (empty($config['paypal_client_id']) || empty($config['paypal_secret_key'])) {
-        sendTelegram("PayPal payment gateway not configured");
+        Message::sendTelegram("PayPal payment gateway not configured");
         r2(U . 'order/package', 'w', Lang::T("Admin has not yet setup Paypal payment gateway, please tell admin"));
     }
 }
@@ -103,7 +103,7 @@ function paypal_create_transaction($trx, $user)
         true
     );
     if (!$result['id']) {
-        sendTelegram("paypal_create_transaction FAILED: \n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        Message::sendTelegram("paypal_create_transaction FAILED: \n\n" . json_encode($result, JSON_PRETTY_PRINT));
         r2(U . 'order/package', 'e', Lang::T("Failed to create Paypal transaction."));
     }
     $urlPayment = "";
@@ -154,7 +154,7 @@ function paypal_get_status($trx, $user)
         $trx->save();
         r2(U . "order/view/" . $trx['id'], 'd', Lang::T("Transaction expired."));
     } else {
-        sendTelegram("xendit_get_status: unknown result\n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        Message::sendTelegram("xendit_get_status: unknown result\n\n" . json_encode($result, JSON_PRETTY_PRINT));
         r2(U . "order/view/" . $trx['id'], 'w', "Transaction status :" . $result['status']);
     }
 }
