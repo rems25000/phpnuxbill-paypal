@@ -15,8 +15,8 @@ function paypal_validate_config()
 {
     global $config;
     if (empty($config['paypal_client_id']) || empty($config['paypal_secret_key'])) {
-        Message::sendTelegram("PayPal payment gateway not configured");
-        r2(U . 'order/package', 'w', Lang::T("Admin has not yet setup Paypal payment gateway, please tell admin"));
+        sendTelegram("PayPal payment gateway not configured");
+        r2(U . 'order/package', 'w', "Admin has not yet setup Paypal payment gateway, please tell admin");
     }
 }
 
@@ -88,7 +88,6 @@ function paypal_create_transaction($trx, $user)
             "cancel_url" => U . "order/view/" . $trx['id'],
         ]
     ];
-    //die(json_encode($json,JSON_PRETTY_PRINT));
 
     $result = json_decode(
         Http::postJsonData(
@@ -103,8 +102,8 @@ function paypal_create_transaction($trx, $user)
         true
     );
     if (!$result['id']) {
-        Message::sendTelegram("paypal_create_transaction FAILED: \n\n" . json_encode($result, JSON_PRETTY_PRINT));
-        r2(U . 'order/package', 'e', Lang::T("Failed to create Paypal transaction."));
+        sendTelegram("paypal_create_transaction FAILED: \n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        r2(U . 'order/package', 'e', "Failed to create Paypal transaction.");
     }
     $urlPayment = "";
     foreach ($result['links'] as $link) {
@@ -132,31 +131,61 @@ function paypal_create_transaction($trx, $user)
 function paypal_payment_notification()
 {
     // Not yet implemented
+    die('OK');
 }
 
 function paypal_get_status($trx, $user)
 {
+    $capture = [];
+    if (empty($trx->pg_paid_response)) {
+        $capture = paypal_capture_transaction($trx['gateway_trx_id']);
+    } else {
+        $capture = json_decode($trx->pg_paid_response, true)['paypal_capture'];
+        if (empty($capture)) {
+            $capture = paypal_capture_transaction($trx['gateway_trx_id']);
+        }
+    }
     $result = json_decode(Http::getData(paypal_get_server() . 'checkout/orders/' . $trx['gateway_trx_id'], ['Authorization: Bearer ' . paypalGetAccessToken()]), true);
     if (in_array($result['status'], ['APPROVED', 'COMPLETED']) && $trx['status'] != 2) {
-        if (!Package::rechargeUser($user['id'], $trx['routers'], $trx['plan_id'], $trx['gateway'], 'Paypal')) {
-            r2(U . "order/view/" . $trx['id'], 'd', Lang::T("Failed to activate your Package, try again later."));
+        if ($capture['status'] == 'COMPLETED' || ($capture['name'] == 'UNPROCESSABLE_ENTITY' && $capture['details'][0]['issue'] == 'ORDER_ALREADY_CAPTURED')) {
+            if (!Package::rechargeUser($user['id'], $trx['routers'], $trx['plan_id'], $trx['gateway'], 'Paypal')) {
+                r2(U . "order/view/" . $trx['id'], 'd', "Failed to activate your Package, try again later.");
+            }
+            $result['paypal_capture'] = json_encode($capture);
+            $trx->pg_paid_response = json_encode($result);
+            $trx->payment_method = 'PAYPAL';
+            $trx->payment_channel = 'paypal';
+            $trx->paid_date = date('Y-m-d H:i:s', strtotime($result['updated']));
+            $trx->status = 2;
+            $trx->save();
+            r2(U . "order/view/" . $trx['id'], 's', "Transaction has been paid.");
+        } else {
+            r2(U . "order/view/" . $trx['id'], 'e', "Transaction Success, but not yet captured.");
         }
-        $trx->pg_paid_response = json_encode($result);
-        $trx->payment_method = 'PAYPAL';
-        $trx->payment_channel = 'paypal';
-        $trx->paid_date = date('Y-m-d H:i:s', strtotime($result['updated']));
-        $trx->status = 2;
-        $trx->save();
-        r2(U . "order/view/" . $trx['id'], 's', Lang::T("Transaction has been paid."));
     } else if ($result['status'] == 'VOIDED') {
         $trx->pg_paid_response = json_encode($result);
         $trx->status = 3;
         $trx->save();
-        r2(U . "order/view/" . $trx['id'], 'd', Lang::T("Transaction expired."));
+        r2(U . "order/view/" . $trx['id'], 'd', "Transaction expired.");
     } else {
-        Message::sendTelegram("xendit_get_status: unknown result\n\n" . json_encode($result, JSON_PRETTY_PRINT));
+        sendTelegram("xendit_get_status: unknown result\n\n" . json_encode($result, JSON_PRETTY_PRINT));
         r2(U . "order/view/" . $trx['id'], 'w', "Transaction status :" . $result['status']);
     }
+}
+
+function paypal_capture_transaction($trx_id)
+{
+    return json_decode(
+        Http::postJsonData(
+            paypal_get_server() . 'checkout/orders/' . $trx_id . '/capture',
+            [],
+            [
+                'PayPal-Partner-Attribution-Id: &lt;BN-Code&gt;',
+                'Authorization: Bearer ' . paypalGetAccessToken()
+            ]
+        ),
+        true
+    );
 }
 
 function paypalGetAccessToken()
