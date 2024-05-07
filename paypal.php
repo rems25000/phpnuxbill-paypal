@@ -178,9 +178,9 @@ function paypal_capture_transaction($trx_id)
     return json_decode(
         Http::postJsonData(
             paypal_get_server() . 'checkout/orders/' . $trx_id . '/capture',
-            [],
+            null, // Aucun corps de requête
             [
-                'PayPal-Partner-Attribution-Id: &lt;BN-Code&gt;',
+                'Content-Type: application/json',
                 'Authorization: Bearer ' . paypalGetAccessToken()
             ]
         ),
